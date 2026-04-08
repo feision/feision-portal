@@ -259,7 +259,12 @@
       </div>
     </header>
 
-    <div class="stats" id="stats"></div>
+    <div class="stats" id="stats">
+      <div class="stat-item"><div class="stat-value" id="statRepos">-</div><div class="stat-label">Repositories</div></div>
+      <div class="stat-item"><div class="stat-value" id="statOwn">-</div><div class="stat-label">Original</div></div>
+      <div class="stat-item"><div class="stat-value" id="statStars">-</div><div class="stat-label">Stars</div></div>
+      <div class="stat-item"><div class="stat-value" id="statForks">-</div><div class="stat-label">Forks</div></div>
+    </div>
     <div class="load-progress" id="loadProgress"><div class="load-progress-bar" id="loadProgressBar"></div></div>
 
     <div class="toolbar">
@@ -273,7 +278,7 @@
     </div>
 
     <div class="projects-grid" id="projects">
-      <div class="loading"><div class="spinner"></div></div>
+      <div class="loading"><div class="spinner"></div><p style="margin-top:12px;color:var(--text-secondary);font-size:0.9rem">加载中...</p></div>
     </div>
 
     <footer>
@@ -282,6 +287,14 @@
   </div>
 
   <script>
+    // 全局错误兜底，防止 JS 异常导致白屏
+    window.addEventListener('error', function(e) {
+      console.error('Global error:', e.message);
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      console.error('Unhandled rejection:', e.reason);
+    });
+
     const GITHUB_USERNAME = 'feision';
     const CACHE_KEY = 'gh_repos_feision';
     const DETAIL_CACHE_KEY = 'gh_detail_feision';
@@ -335,17 +348,27 @@
       if (pct >= 100) setTimeout(() => wrap.classList.remove('active'), 500);
     }
 
-    // ========== 网络请求 ==========
-    async function tryFetch(url) {
-      const res = await fetch(url);
+    // ========== 网络请求（带超时） ==========
+    function fetchWithTimeout(url, ms = 3000) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), ms);
+      return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+    }
+
+    async function tryFetch(url, timeout = 3000) {
+      const res = await fetchWithTimeout(url, timeout);
       if (!res.ok) throw new Error(res.status);
       return res;
     }
 
     const makeAttempts = (url) => [
-      () => tryFetch(url),
-      () => tryFetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`),
-      () => tryFetch(`https://corsproxy.io/?${encodeURIComponent(url)}`),
+      () => tryFetch(url, 5000),                                                                            // 1. 直接请求（给5秒）
+      () => tryFetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, 3000),               // 2. allorigins
+      () => tryFetch(`https://corsproxy.io/?${encodeURIComponent(url)}`, 3000),                            // 3. corsproxy
+      () => tryFetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, 3000),          // 4. codetabs
+      () => tryFetch(`https://cors.sh/?${encodeURIComponent(url)}`, 3000),                                 // 5. cors.sh
+      () => tryFetch(`https://crossorigin.me/${encodeURIComponent(url)}`, 3000),                           // 6. crossorigin
+      () => tryFetch(`https://thingproxy.freeboard.io/fetch/${url}`, 3000),                                // 7. thingproxy
     ];
 
     async function fetchPage(page) {
@@ -410,11 +433,10 @@
         renderCards();
         setProgress(100);
         silentRefresh();
-        preloadAllDetails();
+        fetchDetailsForRepos(allRepos);
         return;
       }
       await loadFromNetwork();
-      preloadAllDetails();
     }
 
     function rebuildRepoMap() {
@@ -469,6 +491,9 @@
         rebuildRepoMap();
         renderStats();
         renderCards();
+        setProgress(30);
+        // 并行加载第一页详情
+        fetchDetailsForRepos(first.data);
         setProgress(50);
 
         let page = 2;
@@ -480,6 +505,8 @@
             rebuildRepoMap();
             renderStats();
             appendNewCards();
+            // 并行加载该页详情
+            fetchDetailsForRepos(next.data);
             setProgress(Math.min(50 + page * 15, 95));
             if (!next.hasNext && next.data.length < PER_PAGE) break;
             if (!next.hasNext) break;
@@ -502,6 +529,7 @@
               renderCards();
               writeCache(CACHE_KEY, allRepos);
               setProgress(100);
+              fetchDetailsForRepos(allRepos);
               return;
             } catch (_) {}
           }
@@ -516,17 +544,42 @@
       }
     }
 
+    // ========== 并行加载详情（不阻塞主流程） ==========
+    function fetchDetailsForRepos(repos) {
+      for (const repo of repos) {
+        const rid = String(repo.id);
+        const current = repoMap.get(rid);
+        if (current && current._detailLoaded) continue;
+        // 不 await，并发执行，不阻塞列表加载
+        fetchRepoDetail(repo).then(() => {
+          if (expandedCardId === rid) {
+            const card = document.querySelector(`[data-repo-id="${rid}"]`);
+            if (card) {
+              const detailEl = card.querySelector('.card-detail');
+              if (detailEl && !detailEl.dataset.fullyLoaded) {
+                const detail = repoMap.get(rid);
+                if (detail && detail._detailLoaded) {
+                  fillDetailPanel(detailEl, detail);
+                  detailEl.dataset.fullyLoaded = '1';
+                  detailEl.dataset.loaded = '1';
+                }
+              }
+            }
+          }
+        }).catch(() => {});
+      }
+    }
+
     // ========== 统计 ==========
     function renderStats() {
       const total = allRepos.length;
       const own = allRepos.filter(r => !r.fork).length;
       const stars = allRepos.reduce((s, r) => s + r.stargazers_count, 0);
       const forks = allRepos.reduce((s, r) => s + r.forks_count, 0);
-      document.getElementById('stats').innerHTML = `
-        <div class="stat-item"><div class="stat-value">${total}</div><div class="stat-label">Repositories</div></div>
-        <div class="stat-item"><div class="stat-value">${own}</div><div class="stat-label">Original</div></div>
-        <div class="stat-item"><div class="stat-value">${stars}</div><div class="stat-label">Stars</div></div>
-        <div class="stat-item"><div class="stat-value">${forks}</div><div class="stat-label">Forks</div></div>`;
+      document.getElementById('statRepos').textContent = total;
+      document.getElementById('statOwn').textContent = own;
+      document.getElementById('statStars').textContent = stars;
+      document.getElementById('statForks').textContent = forks;
     }
 
     // ========== 筛选 ==========
@@ -620,7 +673,7 @@
       if (!repo._detailLoaded) {
         const loaderEl = detailEl.querySelector('.detail-loader');
         if (loaderEl) {
-          loaderEl.innerHTML = `<div class="spinner" style="width:24px;height:24px;margin:8px auto"></div><p style="text-align:center;color:var(--text-secondary);font-size:0.8rem;margin-top:4px">加载详情中...</p>`;
+          loaderEl.innerHTML = `<div class="spinner" style="width:24px;height:24px;margin:8px auto"></div><p style="text-align:center;color:var(--text-secondary);font-size:0.8rem;margin-top:4px">加载项目详情和AI提示词中...</p>`;
         }
       }
 
@@ -816,7 +869,22 @@
     });
 
     // ========== 启动 ==========
-    fetchRepos();
+    (async function init() {
+      try {
+        await fetchRepos();
+      } catch (e) {
+        console.error('Init failed:', e);
+        const grid = document.getElementById('projects');
+        if (grid) {
+          grid.innerHTML = `
+            <div class="empty-state">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+              <p>初始化失败，请刷新重试</p>
+              <p style="font-size:0.8rem;margin-top:8px;opacity:0.6">${e.message || '未知错误'}</p>
+            </div>`;
+        }
+      }
+    })();
   </script>
 </body>
 </html>

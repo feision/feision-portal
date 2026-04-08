@@ -15,7 +15,7 @@
 - **深色主题** — 专业的暗色背景搭配 indigo 强调色
 - **动画交互** — 卡片悬浮上移 + 辉光效果，渐入加载动画
 - **响应式** — 移动端自动切换为单列布局
-- **CORS Fallback** — 内置三级代理机制，本地和第三方平台均可正常访问
+- **CORS Fallback** — 内置七层代理机制（含超时），本地和第三方平台均可正常访问
 - **跨平台部署** — 支持 GitHub Pages / Cloudflare Worker / Vercel / 本地等任意环境
 - **双层缓存** — 列表缓存 30min + 详情缓存 2h，秒开体验
 - **零依赖** — 纯 HTML/CSS/JS 单文件，无需构建工具，性能极佳
@@ -373,6 +373,14 @@ const LANG_COLORS = {
 
 ## 📋 更新日志
 
+### v1.6 (2026-04-08)
+
+- 🔧 修复手机端白屏：Stats 区域 innerHTML 改为固定 HTML + textContent 更新，避免移动浏览器兼容问题
+- 🚀 CORS 代理从 2 个扩展到 7 个（新增 codetabs / cors.sh / crossorigin / thingproxy），每个 3 秒超时
+- 🛡️ 全局错误兜底：window.onerror + unhandledrejection + init try-catch，JS 异常不再白屏
+- 💬 加载提示优化：列表区"加载中..."，详情区"加载项目详情和AI提示词中..."
+- ⚡ 并行加载详情替代串行预加载（v1.5 特性同步修复）
+
 ### v1.5 (2026-04-08)
 
 - 🚀 列表与详情并行加载：每页列表渲染完立即并发请求该页所有 repo 详情，30个repo从24s降至~4s全部就绪
@@ -433,7 +441,7 @@ const LANG_COLORS = {
 |------|------|------|
 | 前端 | HTML5 / CSS3 / ES6+ | 纯原生，零框架零依赖 |
 | 数据源 | GitHub REST API v3 | 实时拉取仓库信息 |
-| CORS 代理 | allorigins.win / corsproxy.io | index.html 的 fallback 方案 |
+| CORS 代理 | allorigins / corsproxy / codetabs / cors.sh / crossorigin / thingproxy（7层 fallback，各3s超时） | index.html 的 fallback 方案 |
 | 服务端代理 | Cloudflare Workers | worker.js 版本，彻底解决 CORS |
 | 部署 | GitHub Pages (Legacy 模式) | 静态文件直接部署，无需构建 |
 | 部署 | Cloudflare Workers | 服务端渲染 + API 代理 |

@@ -6,6 +6,18 @@
  * 
  * 配置项：修改下方 GITHUB_USERNAME 为你的 GitHub 用户名
  * 
+ * v1.6 新增：
+ * - CORS 代理增加 5 个备用节点（共 7 层 fallback），每个 3 秒超时
+ * - Stats 标签固定在 HTML 中，JS 只更新数字（避免 innerHTML 兼容问题）
+ * - 加载提示优化：列表区"加载中..."，详情区"加载项目详情和AI提示词中..."
+ * - 并行加载详情替代串行预加载
+ * - 全局错误兜底，防止 JS 异常导致白屏
+ * 
+ * v1.5 新增：
+ * - 列表与详情并行加载：每页列表渲染完立即并发请求该页所有 repo 详情
+ * - 固定文字优先显示：Stats 标签直接写在 HTML 中，带"-"占位符，JS 只更新数字
+ * - 加载提示优化：列表区域显示"加载中..."，详情区域显示"加载项目详情和AI提示词中..."
+ * 
  * v1.4 新增：
  * - 列表加载完成后自动预加载所有项目详情（后台静默，200ms 间隔）
  * - 点击卡片立即显示"访问项目"按钮（无需等待详情 API）
@@ -249,7 +261,12 @@ function getHTML() {
         </a>
       </div>
     </header>
-    <div class="stats" id="stats"></div>
+    <div class="stats" id="stats">
+      <div class="stat-item"><div class="stat-value" id="statRepos">-</div><div class="stat-label">Repositories</div></div>
+      <div class="stat-item"><div class="stat-value" id="statOwn">-</div><div class="stat-label">Original</div></div>
+      <div class="stat-item"><div class="stat-value" id="statStars">-</div><div class="stat-label">Stars</div></div>
+      <div class="stat-item"><div class="stat-value" id="statForks">-</div><div class="stat-label">Forks</div></div>
+    </div>
     <div class="load-progress" id="loadProgress"><div class="load-progress-bar" id="loadProgressBar"></div></div>
     <div class="toolbar">
       <div class="search-box">
@@ -261,13 +278,17 @@ function getHTML() {
       <button class="filter-btn" data-filter="forked">Fork</button>
     </div>
     <div class="projects-grid" id="projects">
-      <div class="loading"><div class="spinner"></div></div>
+      <div class="loading"><div class="spinner"></div><p style="margin-top:12px;color:var(--text-secondary);font-size:0.9rem">加载中...</p></div>
     </div>
     <footer>
       Powered by <a href="https://github.com/${GITHUB_USERNAME}" target="_blank" rel="noopener">${GITHUB_USERNAME}</a> · Data from GitHub API · Deployed on Cloudflare Workers
     </footer>
   </div>
   <script>
+    // 全局错误兜底
+    window.addEventListener('error', function(e) { console.error('Global error:', e.message); });
+    window.addEventListener('unhandledrejection', function(e) { console.error('Unhandled rejection:', e.reason); });
+
     const LANG_COLORS = ${JSON.stringify(LANG_COLORS)};
     const FALLBACK_LANG_COLOR = '${FALLBACK_LANG_COLOR}';
     const CACHE_KEY = 'gh_repos_${GITHUB_USERNAME}';
@@ -322,7 +343,7 @@ function getHTML() {
         renderCards();
         setProgress(100);
         silentRefresh();
-        preloadAllDetails();
+        fetchDetailsForRepos(allRepos);
         return;
       }
       // 网络
@@ -336,11 +357,11 @@ function getHTML() {
         renderStats();
         renderCards();
         setProgress(100);
+        fetchDetailsForRepos(allRepos);
       } catch(e) {
         document.getElementById('projects').innerHTML =
           '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg><p>加载失败，请稍后刷新重试</p></div>';
       }
-      preloadAllDetails();
     }
 
     async function silentRefresh() {
@@ -398,11 +419,10 @@ function getHTML() {
       var own = allRepos.filter(function(r) { return !r.fork; }).length;
       var stars = allRepos.reduce(function(s, r) { return s + r.stargazers_count; }, 0);
       var forks = allRepos.reduce(function(s, r) { return s + r.forks_count; }, 0);
-      document.getElementById('stats').innerHTML =
-        '<div class="stat-item"><div class="stat-value">' + total + '</div><div class="stat-label">Repositories</div></div>' +
-        '<div class="stat-item"><div class="stat-value">' + own + '</div><div class="stat-label">Original</div></div>' +
-        '<div class="stat-item"><div class="stat-value">' + stars + '</div><div class="stat-label">Stars</div></div>' +
-        '<div class="stat-item"><div class="stat-value">' + forks + '</div><div class="stat-label">Forks</div></div>';
+      document.getElementById('statRepos').textContent = total;
+      document.getElementById('statOwn').textContent = own;
+      document.getElementById('statStars').textContent = stars;
+      document.getElementById('statForks').textContent = forks;
     }
 
     // ========== 筛选 ==========
@@ -483,7 +503,7 @@ function getHTML() {
       if (!repo._detailLoaded) {
         var loaderEl = detailEl.querySelector('.detail-loader');
         if (loaderEl) {
-          loaderEl.innerHTML = '<div class="spinner" style="width:24px;height:24px;margin:8px auto"></div><p style="text-align:center;color:var(--text-secondary);font-size:0.8rem;margin-top:4px">加载详情中...</p>';
+          loaderEl.innerHTML = '<div class="spinner" style="width:24px;height:24px;margin:8px auto"></div><p style="text-align:center;color:var(--text-secondary);font-size:0.8rem;margin-top:4px">加载项目详情和AI提示词中...</p>';
         }
       }
       var detail = await fetchRepoDetail(repo);
@@ -627,7 +647,16 @@ function getHTML() {
       }
     }
 
-    fetchRepos();
+    // ========== 启动（带错误兜底） ==========
+    (async function init() {
+      try { await fetchRepos(); } catch(e) {
+        console.error('Init failed:', e);
+        var grid = document.getElementById('projects');
+        if (grid) {
+          grid.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg><p>初始化失败，请刷新重试</p><p style="font-size:0.8rem;margin-top:8px;opacity:0.6">' + (e.message || '未知错误') + '</p></div>';
+        }
+      }
+    })();
   </script>
 </body>
 </html>`;
