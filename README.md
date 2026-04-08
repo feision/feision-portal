@@ -1,20 +1,23 @@
 # 🚀 feision-portal
 
-> **v1.2** — [更新日志](#-更新日志)
+> **v1.3** — [更新日志](#-更新日志)
 
-一个基于 GitHub API 的个人项目导航落地页，自动展示你的 GitHub 仓库，支持搜索筛选，深色主题，零依赖纯前端实现。
+一个基于 GitHub API 的个人项目导航落地页，自动展示你的 GitHub 仓库，支持搜索筛选、详情展开、AI 提示词复制，深色主题，零依赖纯前端实现。
 
-![version](https://img.shields.io/badge/version-1.2-blue) ![preview](https://img.shields.io/badge/构建状态-成功-brightgreen) ![license](https://img.shields.io/badge/license-MIT-blue)
+![version](https://img.shields.io/badge/version-1.3-blue) ![preview](https://img.shields.io/badge/构建状态-成功-brightgreen) ![license](https://img.shields.io/badge/license-MIT-blue)
 
 ## ✨ 特性
 
 - **实时数据** — 通过 GitHub API 自动拉取仓库信息，无需手动维护
 - **搜索筛选** — 支持按项目名/描述/语言搜索，可按"全部/原创/Fork"筛选
+- **详情展开** — 点击卡片展开详情面板，懒加载按需获取，不浪费首屏资源
+- **AI 提示词** — 一键复制项目信息提示词，直接粘贴给 AI 解读项目
 - **深色主题** — 专业的暗色背景搭配 indigo 强调色
 - **动画交互** — 卡片悬浮上移 + 辉光效果，渐入加载动画
 - **响应式** — 移动端自动切换为单列布局
 - **CORS Fallback** — 内置三级代理机制，本地和第三方平台均可正常访问
 - **跨平台部署** — 支持 GitHub Pages / Cloudflare Worker / Vercel / 本地等任意环境
+- **双层缓存** — 列表缓存 30min + 详情缓存 2h，秒开体验
 - **零依赖** — 纯 HTML/CSS/JS 单文件，无需构建工具，性能极佳
 
 ## 📸 预览
@@ -370,6 +373,20 @@ const LANG_COLORS = {
 
 ## 📋 更新日志
 
+### v1.3 (2026-04-08)
+
+- 🆕 新增详情面板懒加载：点击卡片展开详情，首次展开才请求 API，不浪费首屏资源
+- 🆕 新增 AI 提示词一键复制：展开详情面板后可复制项目信息提示词给 AI 解读
+- 🆕 新增"访问项目"按钮：详情面板中直接跳转 GitHub 项目
+- 🆕 新增双层 localStorage 缓存：列表缓存 30 分钟 + 详情缓存 2 小时
+- 🆕 新增开发详情文档 `DEVELOPMENT.md`：完整记录技术策略、架构决策和二次开发指南
+- 🔧 修复详情面板点击不稳定 bug：根因是 `r.id` 数字/字符串类型不一致
+- 🔧 修复静默刷新后展开状态丢失：改为 `smartUpdateCards()` 智能差异更新
+- 🔧 事件委托替代内联 onclick：无论 DOM 怎么重建，点击事件永不失效
+- 🔧 分页大小从 30 优化为 10：首屏渲染速度提升 3x
+- 🔧 Worker 新增 `/api/repos/:name` 详情代理接口
+- 🔧 Worker 前端同步升级：懒加载详情 + 事件委托 + 双层缓存
+
 ### v1.2 (2026-04-08)
 
 - 🆕 新增 Cloudflare Worker 版本 (`worker.js`)，服务端代理 GitHub API 彻底解决 CORS
@@ -433,9 +450,10 @@ const LANG_COLORS = {
 
 | 文件 | 说明 |
 |------|------|
-| `index.html` | 纯静态版本，适用于 GitHub Pages 部署，内置 CORS fallback |
-| `worker.js` | Cloudflare Worker 版本，服务端代理 API，彻底解决 CORS |
+| `index.html` | 纯静态版本，适用于 GitHub Pages 部署，内置 CORS fallback + 懒加载详情 + 双层缓存 |
+| `worker.js` | Cloudflare Worker 版本，服务端代理 API，彻底解决 CORS，支持详情代理 |
 | `README.md` | 项目文档，包含部署教程和踩坑记录 |
+| `DEVELOPMENT.md` | 开发详情文档，记录技术策略和二次开发指南 |
 
 如果你想用命令行管理 GitHub Pages：
 
