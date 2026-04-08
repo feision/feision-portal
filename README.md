@@ -1,8 +1,10 @@
 # 🚀 feision-portal
 
+> **v1.2** — [更新日志](#-更新日志)
+
 一个基于 GitHub API 的个人项目导航落地页，自动展示你的 GitHub 仓库，支持搜索筛选，深色主题，零依赖纯前端实现。
 
-![preview](https://img.shields.io/badge/构建状态-成功-brightgreen) ![license](https://img.shields.io/badge/license-MIT-blue)
+![version](https://img.shields.io/badge/version-1.2-blue) ![preview](https://img.shields.io/badge/构建状态-成功-brightgreen) ![license](https://img.shields.io/badge/license-MIT-blue)
 
 ## ✨ 特性
 
@@ -11,6 +13,8 @@
 - **深色主题** — 专业的暗色背景搭配 indigo 强调色
 - **动画交互** — 卡片悬浮上移 + 辉光效果，渐入加载动画
 - **响应式** — 移动端自动切换为单列布局
+- **CORS Fallback** — 内置三级代理机制，本地和第三方平台均可正常访问
+- **跨平台部署** — 支持 GitHub Pages / Cloudflare Worker / Vercel / 本地等任意环境
 - **零依赖** — 纯 HTML/CSS/JS 单文件，无需构建工具，性能极佳
 
 ## 📸 预览
@@ -300,6 +304,78 @@ const LANG_COLORS = {
   YourLang: '#hexcolor',
 };
 ```
+
+## 📋 更新日志
+
+### v1.2 (2026-04-08)
+
+- 🆕 新增 CORS 代理 fallback 机制，本地和第三方平台可正常加载数据
+- 🆕 新增 allorigins.win / corsproxy.io 双重代理 fallback
+- 📝 新增踩坑记录：CORS 跨域限制问题及解决方案
+- 📝 新增自建 CORS 代理（Cloudflare Worker）教程
+- 🔧 优化错误提示信息，区分 CORS 限制场景
+
+### v1.1 (2026-04-08)
+
+- 📝 新增完整部署教程
+- 📝 新增踩坑记录：GitHub Pages 404 问题、构建模式区别、Git 认证配置
+
+### v1.0 (2026-04-08)
+
+- 🎉 初始版本发布
+- ✅ GitHub API 实时拉取仓库数据
+- ✅ 搜索筛选功能
+- ✅ 深色主题 + 动画交互
+- ✅ 响应式布局
+
+## 🧰 技术栈 & 开发环境
+
+### 技术栈
+
+| 类别 | 技术 | 说明 |
+|------|------|------|
+| 前端 | HTML5 / CSS3 / ES6+ | 纯原生，零框架零依赖 |
+| 数据源 | GitHub REST API v3 | 实时拉取仓库信息 |
+| CORS 代理 | allorigins.win / corsproxy.io | 本地及第三方平台访问的 fallback 方案 |
+| 部署 | GitHub Pages (Legacy 模式) | 静态文件直接部署，无需构建 |
+
+### 开发环境
+
+| 工具 | 版本 / 说明 |
+|------|-------------|
+| 操作系统 | Windows Server (win32) |
+| 编辑器 | CodeBuddy CN (AI IDE) |
+| AI 模型 | GLM-5.1 (由 CodeBuddy 驱动) |
+| 本地服务器 | Python `http.server` / `npx serve` |
+| 版本控制 | Git |
+| 包管理 | 无 (零依赖项目) |
+| GitHub 交互 | GitHub REST API + Python urllib |
+
+### 所需工具
+
+本项目是纯静态单文件项目，**无需安装任何依赖**，你只需要：
+
+- **浏览器** — 任意现代浏览器（Chrome / Firefox / Safari / Edge）
+- **文本编辑器** — 任意编辑器即可修改 `index.html`
+- **Git**（可选）— 用于版本管理和推送到 GitHub
+- **GitHub 账号**（可选）— 用于部署到 GitHub Pages
+
+如果你想用命令行管理 GitHub Pages：
+
+- **Python 3.x** — 用于调用 GitHub API
+- **GitHub Personal Access Token** — 用于 API 认证（需 `repo` 权限）
+
+### AI 开发备注
+
+本项目由 **GLM-5.1** AI 模型辅助开发，使用 **CodeBuddy CN** AI IDE 作为开发环境。整个项目从设计到部署全流程由 AI 完成，包括：
+
+- 页面设计与样式编写
+- GitHub API 集成与数据渲染
+- CORS 跨域问题的诊断与修复
+- GitHub 仓库创建、Pages 部署与构建
+- 踩坑记录文档的整理
+
+> 如果你也想用 AI 辅助开发，推荐使用 CodeBuddy CN，它内置了 CloudBase MCP 等工具链，可以一站式完成编码、调试和部署。
 
 ## 📄 License
 
