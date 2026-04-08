@@ -28,8 +28,8 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
-      background: var(--bg-primary);
-      color: var(--text-primary);
+      background: #0a0a0f; background: var(--bg-primary);
+      color: #e8e8f0; color: var(--text-primary);
       min-height: 100vh;
       overflow-x: hidden;
       line-height: 1.6;
@@ -42,7 +42,7 @@
       pointer-events: none; z-index: 0;
     }
     .bg-grid {
-      position: fixed; inset: 0;
+      position: fixed; top: 0; right: 0; bottom: 0; left: 0;
       background-image: linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
         linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
       background-size: 60px 60px; pointer-events: none; z-index: 0;
@@ -59,7 +59,8 @@
     .hero h1 {
       font-size: 2.5rem; font-weight: 800; letter-spacing: -0.02em;
       background: linear-gradient(135deg, #e8e8f0 0%, #6366f1 100%);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent; color: transparent;
       margin-bottom: 8px;
     }
     .hero p { color: var(--text-secondary); font-size: 1.1rem; margin-bottom: 24px; }
@@ -122,7 +123,7 @@
       transition: var(--transition); position: relative; overflow: hidden; cursor: pointer;
     }
     .project-card::before {
-      content: ''; position: absolute; inset: 0;
+      content: ''; position: absolute; top: 0; right: 0; bottom: 0; left: 0;
       background: linear-gradient(135deg, var(--accent-glow) 0%, transparent 60%);
       opacity: 0; transition: var(--transition);
     }
@@ -278,7 +279,7 @@
     </div>
 
     <div class="projects-grid" id="projects">
-      <div class="loading"><div class="spinner"></div><p style="margin-top:12px;color:var(--text-secondary);font-size:0.9rem">加载中...</p></div>
+      <div class="loading" id="initialLoader"><div class="spinner"></div><p style="margin-top:12px;color:var(--text-secondary);font-size:0.9rem">加载中...</p></div>
     </div>
 
     <footer>
@@ -287,14 +288,6 @@
   </div>
 
   <script>
-    // 全局错误兜底，防止 JS 异常导致白屏
-    window.addEventListener('error', function(e) {
-      console.error('Global error:', e.message);
-    });
-    window.addEventListener('unhandledrejection', function(e) {
-      console.error('Unhandled rejection:', e.reason);
-    });
-
     const GITHUB_USERNAME = 'feision';
     const CACHE_KEY = 'gh_repos_feision';
     const DETAIL_CACHE_KEY = 'gh_detail_feision';
@@ -324,10 +317,10 @@
         const { data, ts } = JSON.parse(raw);
         if (Date.now() - ts > ttl) { localStorage.removeItem(key); return null; }
         return data;
-      } catch { return null; }
+      } catch(e) { return null; }
     }
     function writeCache(key, data) {
-      try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {}
+      try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch(e) {}
     }
     // 读取详情缓存，返回 Map<string, repoDetail>
     function readDetailCache() {
@@ -336,7 +329,9 @@
       return new Map(Object.entries(obj));
     }
     function writeDetailCache(detailMap) {
-      writeCache(DETAIL_CACHE_KEY, Object.fromEntries(detailMap));
+      var obj = {};
+      detailMap.forEach(function(v, k) { obj[k] = v; });
+      writeCache(DETAIL_CACHE_KEY, obj);
     }
 
     // ========== 进度条 ==========
@@ -349,26 +344,32 @@
     }
 
     // ========== 网络请求（带超时） ==========
-    function fetchWithTimeout(url, ms = 3000) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), ms);
-      return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+    function fetchWithTimeout(url, ms) {
+      ms = ms || 3000;
+      // AbortController 不支持时降级为普通 fetch（无超时但不会崩溃）
+      if (typeof AbortController === 'undefined') {
+        return fetch(url);
+      }
+      var controller = new AbortController();
+      var timer = setTimeout(function() { controller.abort(); }, ms);
+      return fetch(url, { signal: controller.signal }).then(
+        function(res) { clearTimeout(timer); return res; },
+        function(err) { clearTimeout(timer); throw err; }
+      );
     }
 
-    async function tryFetch(url, timeout = 3000) {
-      const res = await fetchWithTimeout(url, timeout);
+    async function tryFetch(url, timeout) {
+      var res = await fetchWithTimeout(url, timeout || 3000);
       if (!res.ok) throw new Error(res.status);
       return res;
     }
 
     const makeAttempts = (url) => [
-      () => tryFetch(url, 5000),                                                                            // 1. 直接请求（给5秒）
-      () => tryFetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, 3000),               // 2. allorigins
-      () => tryFetch(`https://corsproxy.io/?${encodeURIComponent(url)}`, 3000),                            // 3. corsproxy
-      () => tryFetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, 3000),          // 4. codetabs
-      () => tryFetch(`https://cors.sh/?${encodeURIComponent(url)}`, 3000),                                 // 5. cors.sh
-      () => tryFetch(`https://crossorigin.me/${encodeURIComponent(url)}`, 3000),                           // 6. crossorigin
-      () => tryFetch(`https://thingproxy.freeboard.io/fetch/${url}`, 3000),                                // 7. thingproxy
+      () => tryFetch(url, 8000),                                                                            // 1. 直接请求（给8秒）
+      () => tryFetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, 5000),               // 2. allorigins
+      () => tryFetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, 5000),          // 3. codetabs
+      () => tryFetch(`https://thingproxy.freeboard.io/fetch/${url}`, 5000),                                // 4. thingproxy
+      () => tryFetch(`https://cors.sh/?${encodeURIComponent(url)}`, 5000),                                 // 5. cors.sh
     ];
 
     async function fetchPage(page) {
@@ -416,7 +417,7 @@
             return detail;
           } catch (_) {}
         }
-      } catch {}
+      } catch(e) {}
       // 4. 降级：用列表数据
       const fallback = { ...repo, _detailLoaded: true };
       repoMap.set(rid, fallback);
@@ -479,7 +480,7 @@
             smartUpdateCards();
           }
         }
-      } catch {}
+      } catch(e) {}
       isRefreshing = false;
     }
 
@@ -516,7 +517,7 @@
 
         writeCache(CACHE_KEY, allRepos);
         setProgress(100);
-      } catch {
+      } catch(e) {
         try {
           const baseUrl = `https://api.github.com/users/${GITHUB_USERNAME}/repos`;
           const fullUrl = `${baseUrl}?sort=updated&per_page=100`;
@@ -533,7 +534,7 @@
               return;
             } catch (_) {}
           }
-        } catch {}
+        } catch(e) {}
 
         document.getElementById('projects').innerHTML = `
           <div class="empty-state">
@@ -624,7 +625,7 @@
     async function copyPrompt(text, btn) {
       try {
         await navigator.clipboard.writeText(text);
-      } catch {
+      } catch(e) {
         const ta = document.createElement('textarea');
         ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
         document.body.appendChild(ta); ta.select(); document.execCommand('copy');
@@ -638,23 +639,23 @@
 
     // ========== 展开/收起卡片（核心交互） ==========
     function toggleCard(repoId) {
-      repoId = String(repoId); // 确保 ID 为字符串
-      const card = document.querySelector(`[data-repo-id="${repoId}"]`);
+      repoId = String(repoId);
+      const card = document.querySelector('[data-repo-id="' + repoId + '"]');
       if (!card) return;
 
       // 收起之前展开的卡片
       if (expandedCardId && expandedCardId !== repoId) {
-        const prev = document.querySelector(`[data-repo-id="${expandedCardId}"]`);
-        if (prev) prev.classList.remove('expanded');
+        var prev = document.querySelector('[data-repo-id="' + expandedCardId + '"]');
+        if (prev) { prev.classList.remove('expanded'); }
       }
 
-      const shouldExpand = !card.classList.contains('expanded');
+      var shouldExpand = !card.classList.contains('expanded');
       card.classList.toggle('expanded');
       expandedCardId = shouldExpand ? repoId : null;
 
       // 懒加载详情：首次展开时填充详情面板
       if (shouldExpand) {
-        const detailEl = card.querySelector('.card-detail');
+        var detailEl = card.querySelector('.card-detail');
         if (detailEl && !detailEl.dataset.loaded) {
           loadDetailIntoCard(repoId, card, detailEl);
         }
@@ -863,25 +864,21 @@
     document.addEventListener('click', (e) => {
       if (expandedCardId && !e.target.closest('.project-card')) {
         const prev = document.querySelector(`[data-repo-id="${expandedCardId}"]`);
-        if (prev) prev.classList.remove('expanded');
+        if (prev) { prev.classList.remove('expanded'); }
         expandedCardId = null;
       }
     });
 
     // ========== 启动 ==========
+
     (async function init() {
       try {
         await fetchRepos();
       } catch (e) {
         console.error('Init failed:', e);
-        const grid = document.getElementById('projects');
+        var grid = document.getElementById('projects');
         if (grid) {
-          grid.innerHTML = `
-            <div class="empty-state">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
-              <p>初始化失败，请刷新重试</p>
-              <p style="font-size:0.8rem;margin-top:8px;opacity:0.6">${e.message || '未知错误'}</p>
-            </div>`;
+          grid.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg><p>初始化失败，请刷新重试</p><p style="font-size:0.8rem;margin-top:8px;opacity:0.6">' + (e.message || '未知错误') + '</p></div>';
         }
       }
     })();

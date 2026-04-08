@@ -373,6 +373,11 @@ const LANG_COLORS = {
 
 ## 📋 更新日志
 
+### v1.7 (2026-04-09)
+
+- 🔧 优化 CORS 代理：移除不稳定的 crossorigin.me，增加超时时间（直接请求 8 秒，代理 5 秒）
+- 🔧 修复 JS 兼容性问题：catch 参数、Object.fromEntries 回退、inset 属性
+
 ### v1.6 (2026-04-08)
 
 - 🔧 修复手机端白屏：Stats 区域 innerHTML 改为固定 HTML + textContent 更新，避免移动浏览器兼容问题

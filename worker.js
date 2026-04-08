@@ -5,9 +5,10 @@
  * 部署方式：在 Cloudflare Dashboard 创建 Worker，粘贴此代码即可
  * 
  * 配置项：修改下方 GITHUB_USERNAME 为你的 GitHub 用户名
- * 
- * v1.6 新增：
- * - CORS 代理增加 5 个备用节点（共 7 层 fallback），每个 3 秒超时
+ *
+ * v1.7 新增：
+ * - 优化 CORS 代理：移除不稳定的 crossorigin.me，增加超时时间（直接请求 8 秒，代理 5 秒）
+ * - 修复 JS 兼容性问题：catch 参数、Object.fromEntries 回退、inset 属性
  * - Stats 标签固定在 HTML 中，JS 只更新数字（避免 innerHTML 兼容问题）
  * - 加载提示优化：列表区"加载中..."，详情区"加载项目详情和AI提示词中..."
  * - 并行加载详情替代串行预加载
@@ -73,7 +74,7 @@ function getHTML() {
       pointer-events: none; z-index: 0;
     }
     .bg-grid {
-      position: fixed; inset: 0;
+      position: fixed; top: 0; right: 0; bottom: 0; left: 0;
       background-image: linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
         linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
       background-size: 60px 60px; pointer-events: none; z-index: 0;
@@ -139,7 +140,7 @@ function getHTML() {
       opacity: 0; transform: translateY(20px); animation: fadeInUp 0.5s ease forwards;
     }
     .project-card::before {
-      content: ''; position: absolute; inset: 0;
+      content: ''; position: absolute; top: 0; right: 0; bottom: 0; left: 0;
       background: linear-gradient(135deg, var(--accent-glow) 0%, transparent 60%);
       opacity: 0; transition: var(--transition);
     }
@@ -320,7 +321,9 @@ function getHTML() {
       return new Map(Object.entries(obj));
     }
     function writeDetailCache(detailMap) {
-      writeCache(DETAIL_CACHE_KEY, Object.fromEntries(detailMap));
+      var obj = {};
+      detailMap.forEach(function(v, k) { obj[k] = v; });
+      writeCache(DETAIL_CACHE_KEY, obj);
     }
 
     // ========== 进度条 ==========
