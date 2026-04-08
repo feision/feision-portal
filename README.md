@@ -136,6 +136,69 @@ req = urllib.request.Request(
 urllib.request.urlopen(req)
 ```
 
+### 5. 部署到 Cloudflare Workers
+
+本项目提供了 `worker.js`，可直接部署到 Cloudflare Workers，**在服务端代理 GitHub API，彻底解决 CORS 跨域问题**。
+
+#### 方式 A：Cloudflare Dashboard 部署（推荐）
+
+1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)
+2. 进入 **Workers & Pages → Create application → Create Worker**
+3. 给 Worker 起个名字（如 `feision-portal`），点击 **Deploy**
+4. 点击 **Edit code**，删除默认代码，将 `worker.js` 的内容粘贴进去
+5. 修改第 9 行的 `GITHUB_USERNAME` 为你的用户名：
+   ```javascript
+   const GITHUB_USERNAME = '你的用户名';
+   ```
+6. 点击 **Save and deploy**
+7. 访问你的 Worker URL：`https://你的worker名.你的子域名.workers.dev`
+
+#### 方式 B：Wrangler CLI 部署
+
+```bash
+# 安装 Wrangler
+npm install -g wrangler
+
+# 登录
+wrangler login
+
+# 创建项目目录
+mkdir feision-portal-worker && cd feision-portal-worker
+
+# 复制 worker.js 到目录中
+cp /path/to/worker.js ./worker.js
+
+# 创建 wrangler.toml
+cat > wrangler.toml << EOF
+name = "feision-portal"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+EOF
+
+# 部署
+wrangler deploy
+```
+
+#### （可选）配置 GitHub Token 提高 API 速率限制
+
+未认证的 GitHub API 请求限制为 60 次/小时。如果访问量大，可以配置 Token 提升到 5000 次/小时：
+
+1. 在 [GitHub Settings → Tokens](https://github.com/settings/tokens) 创建一个 Token（只需 `public_repo` 权限）
+2. 在 Cloudflare Dashboard 的 Worker 设置中添加环境变量：
+   - 变量名：`GITHUB_TOKEN`
+   - 变量值：你的 Token
+3. 或在 `wrangler.toml` 中配置：
+   ```toml
+   [vars]
+   GITHUB_TOKEN = "ghp_your_token_here"
+   ```
+
+> 💡 **Worker 版本的优势**：
+> - 服务端代理 GitHub API，无 CORS 问题
+> - 内置 5 分钟缓存，减少 API 调用
+> - 支持 GitHub Token 环境变量，安全且可提高速率限制
+> - 自带全球 CDN，访问速度极快
+
 ## ⚠️ 踩坑记录
 
 以下是部署过程中遇到的问题及解决方案，希望能帮你避开这些坑。
@@ -309,10 +372,13 @@ const LANG_COLORS = {
 
 ### v1.2 (2026-04-08)
 
-- 🆕 新增 CORS 代理 fallback 机制，本地和第三方平台可正常加载数据
+- 🆕 新增 Cloudflare Worker 版本 (`worker.js`)，服务端代理 GitHub API 彻底解决 CORS
+- 🆕 新增 CORS 代理 fallback 机制（index.html），本地和第三方平台可正常加载数据
 - 🆕 新增 allorigins.win / corsproxy.io 双重代理 fallback
+- 📝 新增 Cloudflare Worker 部署教程（Dashboard + Wrangler CLI）
 - 📝 新增踩坑记录：CORS 跨域限制问题及解决方案
 - 📝 新增自建 CORS 代理（Cloudflare Worker）教程
+- 🔧 Worker 版本内置 5 分钟 API 缓存 + GitHub Token 环境变量支持
 - 🔧 优化错误提示信息，区分 CORS 限制场景
 
 ### v1.1 (2026-04-08)
@@ -336,8 +402,10 @@ const LANG_COLORS = {
 |------|------|------|
 | 前端 | HTML5 / CSS3 / ES6+ | 纯原生，零框架零依赖 |
 | 数据源 | GitHub REST API v3 | 实时拉取仓库信息 |
-| CORS 代理 | allorigins.win / corsproxy.io | 本地及第三方平台访问的 fallback 方案 |
+| CORS 代理 | allorigins.win / corsproxy.io | index.html 的 fallback 方案 |
+| 服务端代理 | Cloudflare Workers | worker.js 版本，彻底解决 CORS |
 | 部署 | GitHub Pages (Legacy 模式) | 静态文件直接部署，无需构建 |
+| 部署 | Cloudflare Workers | 服务端渲染 + API 代理 |
 
 ### 开发环境
 
@@ -356,9 +424,18 @@ const LANG_COLORS = {
 本项目是纯静态单文件项目，**无需安装任何依赖**，你只需要：
 
 - **浏览器** — 任意现代浏览器（Chrome / Firefox / Safari / Edge）
-- **文本编辑器** — 任意编辑器即可修改 `index.html`
+- **文本编辑器** — 任意编辑器即可修改 `index.html` 或 `worker.js`
 - **Git**（可选）— 用于版本管理和推送到 GitHub
 - **GitHub 账号**（可选）— 用于部署到 GitHub Pages
+- **Cloudflare 账号**（可选）— 用于部署 Worker 版本
+
+### 项目文件说明
+
+| 文件 | 说明 |
+|------|------|
+| `index.html` | 纯静态版本，适用于 GitHub Pages 部署，内置 CORS fallback |
+| `worker.js` | Cloudflare Worker 版本，服务端代理 API，彻底解决 CORS |
+| `README.md` | 项目文档，包含部署教程和踩坑记录 |
 
 如果你想用命令行管理 GitHub Pages：
 
