@@ -49,7 +49,9 @@ const GITHUB_USERNAME = 'feision';  // 👈 改成你的 GitHub 用户名
 
 ### 3. 本地预览
 
-由于使用了 GitHub API（浏览器 fetch），直接双击打开 `index.html` 即可本地预览，无需任何服务器。如果遇到跨域问题，可用本地服务器：
+直接双击打开 `index.html` 即可本地预览。页面内置了 CORS 代理 fallback 机制，本地访问也能正常加载数据。
+
+如果仍遇到跨域问题，可用本地服务器：
 
 ```bash
 # Python
@@ -199,6 +201,78 @@ git push -u origin main
 > ```bash
 > git remote set-url origin https://github.com/用户名/仓库.git
 > ```
+
+### 问题 4：本地访问或部署到 Cloudflare Worker 时项目列表加载失败
+
+**现象**：部署在 GitHub Pages 上可以正常显示项目列表，但本地打开 `index.html` 或部署到 Cloudflare Worker / Vercel / 其他平台时，页面显示"加载失败，请稍后刷新重试"。
+
+**原因**：这是 **CORS（跨域资源共享）限制** 导致的。GitHub API 对不同来源的请求有不同的 CORS 策略：
+
+| 访问来源 | CORS 状态 | 说明 |
+|----------|-----------|------|
+| `*.github.io` | ✅ 允许 | GitHub Pages 域名在白名单中 |
+| `localhost` | ❌ 阻止 | 本地开发不在白名单中 |
+| Cloudflare Worker | ❌ 阻止 | 第三方域名不在白名单中 |
+| Vercel / Netlify 等 | ❌ 阻止 | 第三方域名不在白名单中 |
+
+浏览器在遇到 CORS 限制时会直接阻止 `fetch` 请求，导致数据获取失败。
+
+**解决方案**：本项目已内置 CORS 代理 fallback 机制，代码会按以下顺序尝试获取数据：
+
+1. **直接请求** GitHub API（github.io 等白名单域名可用）
+2. **allorigins.win 代理**（绕过 CORS 限制）
+3. **corsproxy.io 代理**（备用代理）
+
+如果你需要自行部署到非 GitHub Pages 平台，还可以选择：
+
+**方案 A：自建 CORS 代理**（推荐，最稳定）
+
+在 Cloudflare Worker 中创建一个代理：
+
+```javascript
+export default {
+  async fetch(request) {
+    const url = new URL(request.url);
+    const targetUrl = url.searchParams.get('url');
+
+    if (!targetUrl) {
+      return new Response('Missing url parameter', { status: 400 });
+    }
+
+    const response = await fetch(targetUrl, {
+      headers: { 'Accept': 'application/vnd.github.v3+json' }
+    });
+
+    return new Response(response.body, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json'
+      }
+    });
+  }
+}
+```
+
+然后在 `index.html` 中将 API 请求地址改为你的 Worker 地址。
+
+**方案 B：使用 GitHub Token 认证请求**
+
+在 fetch 请求中添加 `Authorization` header，GitHub API 对认证请求的 CORS 策略更宽松：
+
+```javascript
+const res = await fetch(API_URL, {
+  headers: {
+    'Accept': 'application/vnd.github.v3+json',
+    'Authorization': 'token YOUR_GITHUB_TOKEN'
+  }
+});
+```
+
+> ⚠️ **注意**：Token 会暴露在前端代码中，仅适用于私有部署或测试环境，**不要在公开仓库中使用**。
+
+**方案 C：部署在 GitHub Pages 上**（最简单）
+
+直接部署在 GitHub Pages 上，无需处理 CORS 问题，这是最推荐的方式。
 
 ## 📝 自定义指南
 

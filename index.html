@@ -440,19 +440,35 @@
     let currentFilter = 'all';
 
     async function fetchRepos() {
-      try {
-        const res = await fetch(`https://api.github.com/users/${GITHUB_USERNAME}/repos?sort=updated&per_page=100`);
-        if (!res.ok) throw new Error('API 请求失败');
-        allRepos = await res.json();
-        renderStats();
-        renderRepos();
-      } catch (err) {
-        document.getElementById('projects').innerHTML = `
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
-            <p>加载失败，请稍后刷新重试</p>
-          </div>`;
+      const API_URL = `https://api.github.com/users/${GITHUB_USERNAME}/repos?sort=updated&per_page=100`;
+      const headers = { 'Accept': 'application/vnd.github.v3+json' };
+
+      // 尝试列表：直接请求 → CORS 代理
+      const attempts = [
+        () => fetch(API_URL, { headers }),
+        () => fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(API_URL)}`),
+        () => fetch(`https://corsproxy.io/?${encodeURIComponent(API_URL)}`),
+      ];
+
+      for (const attempt of attempts) {
+        try {
+          const res = await attempt();
+          if (res.ok) {
+            allRepos = await res.json();
+            renderStats();
+            renderRepos();
+            return;
+          }
+        } catch (_) {}
       }
+
+      // 所有方案都失败
+      document.getElementById('projects').innerHTML = `
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+          <p>加载失败，请稍后刷新重试</p>
+          <p style="font-size:0.8rem;margin-top:8px;opacity:0.6">可能受 CORS 限制，请尝试部署在 GitHub Pages 上访问</p>
+        </div>`;
     }
 
     function renderStats() {
