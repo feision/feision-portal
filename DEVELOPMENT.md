@@ -10,6 +10,7 @@
 - [数据加载策略](#-数据加载策略)
 - [缓存架构](#-缓存架构)
 - [详情面板懒加载](#-详情面板懒加载)
+- [详情自动预加载](#-详情自动预加载)
 - [事件委托机制](#-事件委托机制)
 - [ID 类型一致性策略](#-id-类型一致性策略)
 - [CORS 跨域解决方案](#-cors-跨域解决方案)
@@ -250,6 +251,68 @@ async function loadDetailIntoCard(repoId, card, detailEl) {
 | 首屏渲染时间 | 慢 | 快 |
 | 详情展示延迟 | 0ms | ~0-200ms（缓存命中则 0ms） |
 | API 请求 | 只需列表接口 | 列表 + 按需请求详情 |
+
+---
+
+## 🔄 详情自动预加载
+
+### 设计思路
+
+v1.4 新增的策略。v1.3 的懒加载虽然节省了首屏资源，但用户点击展开详情时仍需等待网络请求（约 200ms-2s）。对于仓库数量不多的场景（<50 个），可以在列表加载完成后，**后台自动预加载所有详情数据**。
+
+### 优势
+
+| 场景 | 无预加载 | 有预加载 |
+|------|---------|---------|
+| 用户点击展开 | 需等待详情 API（0.2-2s） | 命中缓存，几乎 0ms |
+| 首屏渲染速度 | 快（只加载列表） | 快（预加载不阻塞首屏） |
+| API 请求次数 | 按需请求 | 全部请求（但间隔 200ms，不并发） |
+
+### 实现方式
+
+```javascript
+// 列表加载完后自动触发
+async function preloadAllDetails() {
+  const unloaded = allRepos.filter(r => !repoMap.get(String(r.id))?._detailLoaded);
+  for (const repo of unloaded) {
+    await fetchRepoDetail(repo);    // 带缓存，已加载的跳过
+    await new Promise(r => setTimeout(r, 200));  // 200ms 间隔，避免 API 限流
+  }
+}
+```
+
+**关键设计点**：
+- **不阻塞 UI**：预加载是异步后台执行，用户可以正常操作
+- **200ms 间隔**：避免并发请求打爆 GitHub API 限制
+- **带缓存**：如果某个详情已被点击加载过，`fetchRepoDetail()` 直接返回缓存
+- **动态填充**：如果用户在预加载过程中点击了某张卡片，预加载完成后会自动填充
+
+### 立即显示"访问项目"按钮
+
+v1.4 另一个优化：点击卡片展开时，不等详情 API 返回，**立即用列表数据显示"访问项目"按钮**。
+
+```
+用户点击卡片
+    │
+    ├─ 1. 立即展开面板 + 显示"访问项目"按钮（用列表数据，0ms）
+    │     └─ showQuickActions()：只需 html_url，列表数据已有
+    │
+    └─ 2. 后台加载详情 API（0.2-2s）
+          └─ fillDetailPanel()：替换为完整详情（语言、协议、标签、提示词等）
+```
+
+```javascript
+function showQuickActions(detailEl, repo) {
+  // 用列表数据（已有 html_url），不等详情 API
+  detailEl.innerHTML = `
+    <div class="detail-actions">
+      <a class="detail-btn" href="${repo.html_url}">访问项目</a>
+    </div>
+    <div class="detail-loader">加载详情中...</div>`;
+}
+```
+
+**为什么"访问项目"按钮可以用列表数据？** 因为列表 API 已返回 `html_url` 字段，而详情 API 返回的额外字段（`license`、`default_branch`、`topics` 等）只在详情面板中使用。"访问项目"按钮只需要 `html_url`，所以可以立即显示。
 
 ---
 
@@ -554,4 +617,4 @@ const PER_PAGE = 10;  // 改大（如 30）= 少请求但慢首屏
 
 ---
 
-*文档版本：v1.3 | 最后更新：2026-04-08 | 作者：GLM-5.1 + CodeBuddy CN*
+*文档版本：v1.4 | 最后更新：2026-04-08 | 作者：GLM-5.1 + CodeBuddy CN*

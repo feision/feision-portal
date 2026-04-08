@@ -1,10 +1,10 @@
 # 🚀 feision-portal
 
-> **v1.3** — [更新日志](#-更新日志)
+> **v1.4** — [更新日志](#-更新日志)
 
 一个基于 GitHub API 的个人项目导航落地页，自动展示你的 GitHub 仓库，支持搜索筛选、详情展开、AI 提示词复制，深色主题，零依赖纯前端实现。
 
-![version](https://img.shields.io/badge/version-1.3-blue) ![preview](https://img.shields.io/badge/构建状态-成功-brightgreen) ![license](https://img.shields.io/badge/license-MIT-blue)
+![version](https://img.shields.io/badge/version-1.4-blue) ![preview](https://img.shields.io/badge/构建状态-成功-brightgreen) ![license](https://img.shields.io/badge/license-MIT-blue)
 
 ## ✨ 特性
 
@@ -372,6 +372,13 @@ const LANG_COLORS = {
 ```
 
 ## 📋 更新日志
+
+### v1.4 (2026-04-08)
+
+- 🆕 新增详情自动预加载：列表加载完成后后台静默预加载所有项目详情，点击展开时缓存命中近乎 0ms
+- 🆕 新增"访问项目"按钮立即显示：点击卡片展开时先用列表数据渲染访问按钮，无需等待详情 API 返回
+- 🔧 优化详情面板体验：预加载过程中展开卡片，加载完成后自动填充完整详情
+- 🔧 预加载 200ms 间隔防 API 限流，不阻塞 UI 操作
 
 ### v1.3 (2026-04-08)
 

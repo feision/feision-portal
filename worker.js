@@ -6,6 +6,11 @@
  * 
  * 配置项：修改下方 GITHUB_USERNAME 为你的 GitHub 用户名
  * 
+ * v1.4 新增：
+ * - 列表加载完成后自动预加载所有项目详情（后台静默，200ms 间隔）
+ * - 点击卡片立即显示"访问项目"按钮（无需等待详情 API）
+ * - 详情加载完成后自动填充展开的卡片
+ * 
  * v1.3 新增：
  * - 点击展开详情面板（懒加载）
  * - AI 提示词一键复制 + 访问项目按钮
@@ -317,6 +322,7 @@ function getHTML() {
         renderCards();
         setProgress(100);
         silentRefresh();
+        preloadAllDetails();
         return;
       }
       // 网络
@@ -334,6 +340,7 @@ function getHTML() {
         document.getElementById('projects').innerHTML =
           '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg><p>加载失败，请稍后刷新重试</p></div>';
       }
+      preloadAllDetails();
     }
 
     async function silentRefresh() {
@@ -470,12 +477,30 @@ function getHTML() {
     async function loadDetailIntoCard(repoId, card, detailEl) {
       var repo = repoMap.get(repoId);
       if (!repo) return;
+      // 立即显示"访问项目"按钮（用列表数据，不等待详情 API）
+      showQuickActions(detailEl, repo);
+      // 如果详情还没加载过，显示加载中提示
       if (!repo._detailLoaded) {
-        detailEl.innerHTML = '<div style="text-align:center;padding:20px"><div class="spinner" style="margin:0 auto"></div><p style="margin-top:10px;color:var(--text-secondary);font-size:0.85rem">加载详情中...</p></div>';
+        var loaderEl = detailEl.querySelector('.detail-loader');
+        if (loaderEl) {
+          loaderEl.innerHTML = '<div class="spinner" style="width:24px;height:24px;margin:8px auto"></div><p style="text-align:center;color:var(--text-secondary);font-size:0.8rem;margin-top:4px">加载详情中...</p>';
+        }
       }
       var detail = await fetchRepoDetail(repo);
       fillDetailPanel(detailEl, detail);
       detailEl.dataset.loaded = '1';
+      detailEl.dataset.fullyLoaded = '1';
+    }
+
+    function showQuickActions(detailEl, repo) {
+      detailEl.innerHTML =
+        '<div class="detail-actions" style="margin-bottom:8px">' +
+          '<a class="detail-btn" href="' + repo.html_url + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>' +
+            '访问项目' +
+          '</a>' +
+        '</div>' +
+        '<div class="detail-loader"></div>';
     }
 
     function fillDetailPanel(detailEl, r) {
@@ -574,6 +599,39 @@ function getHTML() {
         expandedCardId = null;
       }
     });
+
+    // ========== 详情自动预加载 ==========
+    async function preloadAllDetails() {
+      var unloaded = allRepos.filter(function(r) {
+        var rid = String(r.id);
+        var repo = repoMap.get(rid);
+        return repo && !repo._detailLoaded;
+      });
+      if (!unloaded.length) return;
+      for (var i = 0; i < unloaded.length; i++) {
+        var repo = unloaded[i];
+        var rid = String(repo.id);
+        var current = repoMap.get(rid);
+        if (current && current._detailLoaded) continue;
+        try { await fetchRepoDetail(repo); } catch(e) {}
+        // 如果该卡片已展开但详情未填充，立即填充
+        if (expandedCardId === rid) {
+          var card = document.querySelector('[data-repo-id="' + rid + '"]');
+          if (card) {
+            var detailEl = card.querySelector('.card-detail');
+            if (detailEl && !detailEl.dataset.fullyLoaded) {
+              var detail = repoMap.get(rid);
+              if (detail && detail._detailLoaded) {
+                fillDetailPanel(detailEl, detail);
+                detailEl.dataset.fullyLoaded = '1';
+                detailEl.dataset.loaded = '1';
+              }
+            }
+          }
+        }
+        await new Promise(function(resolve) { setTimeout(resolve, 200); });
+      }
+    }
 
     fetchRepos();
   </script>
