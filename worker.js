@@ -600,36 +600,30 @@ function getHTML() {
       }
     });
 
-    // ========== 详情自动预加载 ==========
-    async function preloadAllDetails() {
-      var unloaded = allRepos.filter(function(r) {
-        var rid = String(r.id);
-        var repo = repoMap.get(rid);
-        return repo && !repo._detailLoaded;
-      });
-      if (!unloaded.length) return;
-      for (var i = 0; i < unloaded.length; i++) {
-        var repo = unloaded[i];
-        var rid = String(repo.id);
-        var current = repoMap.get(rid);
-        if (current && current._detailLoaded) continue;
-        try { await fetchRepoDetail(repo); } catch(e) {}
-        // 如果该卡片已展开但详情未填充，立即填充
-        if (expandedCardId === rid) {
-          var card = document.querySelector('[data-repo-id="' + rid + '"]');
-          if (card) {
-            var detailEl = card.querySelector('.card-detail');
-            if (detailEl && !detailEl.dataset.fullyLoaded) {
-              var detail = repoMap.get(rid);
-              if (detail && detail._detailLoaded) {
-                fillDetailPanel(detailEl, detail);
-                detailEl.dataset.fullyLoaded = '1';
-                detailEl.dataset.loaded = '1';
+    // ========== 并行加载详情 ==========
+    function fetchDetailsForRepos(repos) {
+      for (var i = 0; i < repos.length; i++) {
+        (function(repo) {
+          var rid = String(repo.id);
+          var current = repoMap.get(rid);
+          if (current && current._detailLoaded) return;
+          fetchRepoDetail(repo).then(function() {
+            if (expandedCardId === rid) {
+              var card = document.querySelector('[data-repo-id="' + rid + '"]');
+              if (card) {
+                var detailEl = card.querySelector('.card-detail');
+                if (detailEl && !detailEl.dataset.fullyLoaded) {
+                  var detail = repoMap.get(rid);
+                  if (detail && detail._detailLoaded) {
+                    fillDetailPanel(detailEl, detail);
+                    detailEl.dataset.fullyLoaded = '1';
+                    detailEl.dataset.loaded = '1';
+                  }
+                }
               }
             }
-          }
-        }
-        await new Promise(function(resolve) { setTimeout(resolve, 200); });
+          }).catch(function() {});
+        })(repos[i]);
       }
     }
 

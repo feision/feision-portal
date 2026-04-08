@@ -815,47 +815,6 @@
       }
     });
 
-    // ========== 详情自动预加载 ==========
-    async function preloadAllDetails() {
-      // 收集所有还没有详情的 repo（排除 fork 项目可选，此处全部预加载）
-      const unloaded = allRepos.filter(r => {
-        const rid = String(r.id);
-        const repo = repoMap.get(rid);
-        return repo && !repo._detailLoaded;
-      });
-      if (!unloaded.length) return;
-
-      for (const repo of unloaded) {
-        const rid = String(repo.id);
-        // 检查是否已有详情（可能其他地方已加载）
-        const current = repoMap.get(rid);
-        if (current && current._detailLoaded) continue;
-
-        try {
-          await fetchRepoDetail(repo);
-        } catch (_) {}
-
-        // 如果该卡片已展开但详情未填充，立即填充
-        if (expandedCardId === rid) {
-          const card = document.querySelector(`[data-repo-id="${rid}"]`);
-          if (card) {
-            const detailEl = card.querySelector('.card-detail');
-            if (detailEl && !detailEl.dataset.fullyLoaded) {
-              const detail = repoMap.get(rid);
-              if (detail && detail._detailLoaded) {
-                fillDetailPanel(detailEl, detail);
-                detailEl.dataset.fullyLoaded = '1';
-                detailEl.dataset.loaded = '1';
-              }
-            }
-          }
-        }
-
-        // 小延迟，避免一次性发出太多请求打爆 GitHub API 限制
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-    }
-
     // ========== 启动 ==========
     fetchRepos();
   </script>
